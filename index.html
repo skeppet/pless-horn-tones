@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pless Horn Tones</title>
+<style>
+  :root {
+    --bg: #f6f3ec; --panel: #fffdf8; --ink: #22201b; --muted: #7a7466;
+    --line: #e2dccf; --accent: #2f6b45; --accent-soft: #dcebdf;
+    --warn: #b5651d; --off: #c8c1b2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161613; --panel: #201f1b; --ink: #ece8de; --muted: #9a9384;
+      --line: #34322c; --accent: #6fbf8a; --accent-soft: #23362a;
+      --warn: #e09a55; --off: #4a473f;
+    }
+  }
+  :root[data-theme="dark"] {
+      --bg: #161613; --panel: #201f1b; --ink: #ece8de; --muted: #9a9384;
+      --line: #34322c; --accent: #6fbf8a; --accent-soft: #23362a;
+      --warn: #e09a55; --off: #4a473f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 560px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 1.15rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: .85rem; margin: 0 0 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+  button {
+    font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    border-radius: 10px; padding: 8px 14px; cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+  /* Big readout */
+  #status { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  #status.tone { color: var(--accent); }
+  #status.noise { color: var(--warn); }
+  #big { font-size: 3.2rem; font-weight: 700; line-height: 1.1; margin: 4px 0; min-height: 3.6rem; }
+  #detail { color: var(--muted); font-size: .95rem; min-height: 1.4em; }
+  .meter { position: relative; height: 26px; margin-top: 14px; border-radius: 8px; background: linear-gradient(90deg, transparent 0 40%, var(--accent-soft) 40% 60%, transparent 60%); border: 1px solid var(--line); }
+  .meter .mid { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: var(--accent); opacity: .6; }
+  .meter .needle { position: absolute; top: 3px; bottom: 3px; width: 6px; margin-left: -3px; border-radius: 3px; background: var(--ink); left: 50%; transition: left .08s linear; opacity: 0; }
+  .meter-labels { display: flex; justify-content: space-between; font-size: .7rem; color: var(--muted); margin-top: 2px; }
+
+  /* Ladder */
+  .ladder { display: flex; flex-direction: column-reverse; gap: 6px; }
+  .rung {
+    display: grid; grid-template-columns: 72px 1fr auto; align-items: center; gap: 10px;
+    padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); cursor: pointer;
+    transition: background .1s, border-color .1s;
+  }
+  .rung.extra { opacity: .55; }
+  .rung .name { font-weight: 700; }
+  .rung .notes { font-size: .85rem; color: var(--muted); }
+  .rung .time { font-variant-numeric: tabular-nums; font-size: .85rem; color: var(--muted); }
+  .rung.active { background: var(--accent-soft); border-color: var(--accent); }
+  .rung.active .name { color: var(--accent); }
+  .hint { font-size: .78rem; color: var(--muted); margin: 8px 0 0; }
+
+  label { font-size: .85rem; color: var(--muted); }
+  input[type=range] { width: 160px; vertical-align: middle; }
+  pre { white-space: pre-wrap; font-size: .8rem; background: var(--bg); padding: 10px; border-radius: 8px; margin: 10px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Pless Horn Tones</h1>
+  <p class="sub">Fürst-Pless-Horn in B♭: which natural tone are you playing?</p>
+
+  <div class="card">
+    <div class="row" style="justify-content: space-between">
+      <button id="start" class="primary">Start listening</button>
+      <span id="status">Idle</span>
+    </div>
+    <div id="big">–</div>
+    <div id="detail">Press start, allow the microphone, and play.</div>
+    <div class="meter"><div class="mid"></div><div class="needle" id="needle"></div></div>
+    <div class="meter-labels"><span>−50¢ flat</span><span>in tune</span><span>sharp +50¢</span></div>
+  </div>
+
+  <div class="card">
+    <div class="ladder" id="ladder"></div>
+    <p class="hint">Tap a row to hear its reference pitch. The times show how long you've held each tone this session.</p>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <label for="offset">Horn tuning offset: <b id="offsetVal">0</b>¢</label>
+      <input id="offset" type="range" min="-60" max="60" step="1" value="0">
+      <button id="calibrate" title="Hold a clean tone, then press">Calibrate to current tone</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="copy">Copy session summary for diary</button>
+      <button id="reset">Reset session</button>
+    </div>
+    <pre id="summary" hidden></pre>
+  </div>
+</main>
+
+<script>
+// ---- Natural tones of a B♭ horn: partial n has frequency F0 * n ----------------------
+const F0 = 440 * Math.pow(2, (46 - 69) / 12); // B♭2 ≈ 116.54 Hz (the unplayable pedal)
+const PARTIALS = [
+  // n: partial number; tone: the hunting-horn count used by players (null = not a signal tone)
+  { n: 2, tone: 1, written: "c'",   sounding: "B♭3" },
+  { n: 3, tone: 2, written: "g'",   sounding: "F4"  },
+  { n: 4, tone: 3, written: "c''",  sounding: "B♭4" },
+  { n: 5, tone: 4, written: "e''",  sounding: "D5"  },
+  { n: 6, tone: 5, written: "g''",  sounding: "F5"  },
+  { n: 7, tone: null, written: "(b♭'')", sounding: "≈A♭5" },
+  { n: 8, tone: null, written: "c'''", sounding: "B♭5" },
+];
+const label = p => p.tone ? `Tone ${p.tone}` : `Partial ${p.n}`;
+
+// ---- Detection tuning -----------------------------------------------------------------
+const MIN_RMS = 0.01;        // below this: silence
+const YIN_THRESHOLD = 0.15;  // lower = stricter about periodicity
+const MAX_CENTS = 45;        // further than this from any partial = "between tones"
+const LOCK_FRAMES = 6;       // consecutive frames on one partial before we call it a tone
+
+let offsetCents = Number(safeGet('offsetCents') || 0);
+const held = Object.fromEntries(PARTIALS.map(p => [p.n, 0])); // seconds per partial
+let audioCtx, analyser, buf, running = false;
+let lastN = null, sameCount = 0, lockedN = null, lastFreq = null, lastT = 0;
+
+// ---- UI setup -------------------------------------------------------------------------
+const $ = id => document.getElementById(id);
+const ladder = $('ladder');
+for (const p of PARTIALS) {
+  const el = document.createElement('div');
+  el.className = 'rung' + (p.tone ? '' : ' extra');
+  el.id = 'rung' + p.n;
+  el.innerHTML = `<span class="name">${label(p)}</span>
+    <span class="notes">written <b>${p.written}</b> · sounds ${p.sounding} · ${(F0 * p.n).toFixed(0)} Hz</span>
+    <span class="time" id="time${p.n}">0.0s</span>`;
+  el.onclick = () => playReference(p.n);
+  ladder.appendChild(el);
+}
+$('offset').value = offsetCents; $('offsetVal').textContent = offsetCents;
+$('offset').oninput = e => setOffset(Number(e.target.value));
+$('start').onclick = () => running ? stop() : start();
+$('calibrate').onclick = calibrate;
+$('reset').onclick = () => { for (const k in held) held[k] = 0; renderTimes(); };
+$('copy').onclick = copySummary;
+
+function setOffset(c) {
+  offsetCents = Math.round(Math.max(-60, Math.min(60, c)));
+  $('offset').value = offsetCents; $('offsetVal').textContent = offsetCents;
+  safeSet('offsetCents', offsetCents);
+}
+
+// ---- Audio ----------------------------------------------------------------------------
+async function start() {
+  try {
+    // Turn off voice processing: noise suppression and AGC mangle sustained instrument tones.
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    });
+    audioCtx = audioCtx || new AudioContext();
+    await audioCtx.resume();
+    const src = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    buf = new Float32Array(analyser.fftSize);
+    src.connect(analyser);
+    analyser._stream = stream;
+    running = true; lastT = performance.now();
+    $('start').textContent = 'Stop';
+    $('detail').textContent = 'Listening…';
+    requestAnimationFrame(tick);
+  } catch (err) {
+    $('detail').textContent = 'Microphone unavailable: ' + err.message +
+      ' (it needs https or localhost, and microphone permission for this page).';
+  }
+}
+
+function stop() {
+  running = false;
+  analyser?._stream.getTracks().forEach(t => t.stop());
+  $('start').textContent = 'Start listening';
+  show('idle');
+}
+
+function tick(now) {
+  if (!running) return;
+  const dt = (now - lastT) / 1000; lastT = now;
+  analyser.getFloatTimeDomainData(buf);
+
+  const rms = Math.sqrt(buf.reduce((s, x) => s + x * x, 0) / buf.length);
+  const pitch = rms < MIN_RMS ? null : yin(buf, audioCtx.sampleRate);
+
+  if (rms < MIN_RMS) {
+    resetLock(); show('idle');
+  } else if (!pitch) {
+    resetLock(); show('noise');           // loud but not periodic: buzz/squeak/air
+  } else {
+    const m = matchPartial(pitch);
+    if (!m) { resetLock(); show('between', pitch); }
+    else {
+      sameCount = (m.p.n === lastN) ? sameCount + 1 : 1;
+      lastN = m.p.n;
+      if (sameCount >= LOCK_FRAMES) {
+        lockedN = m.p.n; lastFreq = pitch;
+        held[m.p.n] += dt;
+        show('tone', pitch, m);
+      } else {
+        show('finding', pitch);
+      }
+    }
+  }
+  renderTimes();
+  requestAnimationFrame(tick);
+}
+
+function resetLock() { lastN = null; sameCount = 0; lockedN = null; }
+
+// Nearest partial measured in cents against the (offset-adjusted) harmonic series.
+function matchPartial(freq) {
+  const base = F0 * Math.pow(2, offsetCents / 1200);
+  const n = Math.round(freq / base);
+  const p = PARTIALS.find(q => q.n === n);
+  if (!p) return null;
+  const cents = 1200 * Math.log2(freq / (base * n));
+  return Math.abs(cents) <= MAX_CENTS ? { p, cents } : null;
+}
+
+// YIN pitch detector (de Cheveigné & Kawahara 2002). Returns Hz or null if not periodic.
+function yin(x, sr) {
+  const W = x.length >> 1;
+  const d = new Float32Array(W);
+  for (let tau = 1; tau < W; tau++) {
+    let s = 0;
+    for (let i = 0; i < W; i++) { const v = x[i] - x[i + tau]; s += v * v; }
+    d[tau] = s;
+  }
+  // Cumulative mean normalised difference
+  d[0] = 1;
+  let running = 0;
+  for (let tau = 1; tau < W; tau++) { running += d[tau]; d[tau] = running ? d[tau] * tau / running : 1; }
+
+  const minTau = Math.floor(sr / 1100), maxTau = Math.min(W - 2, Math.ceil(sr / 90));
+  for (let t = minTau; t < maxTau; t++) {
+    if (d[t] < YIN_THRESHOLD) {
+      while (t + 1 < maxTau && d[t + 1] < d[t]) t++;
+      const a = d[t - 1], b = d[t], c = d[t + 1], den = a + c - 2 * b;
+      const tau = den ? t + (a - c) / (2 * den) : t;   // parabolic interpolation
+      return sr / tau;
+    }
+  }
+  return null;
+}
+
+// ---- Rendering ------------------------------------------------------------------------
+function show(state, freq, m) {
+  const status = $('status'), big = $('big'), detail = $('detail'), needle = $('needle');
+  status.className = '';
+  document.querySelectorAll('.rung').forEach(r => r.classList.remove('active'));
+  needle.style.opacity = 0;
+
+  if (state === 'idle') {
+    status.textContent = running ? 'Listening' : 'Idle';
+    big.textContent = '–';
+    if (running) detail.textContent = 'Silence. Play a tone.';
+  } else if (state === 'noise') {
+    status.textContent = 'No clear tone'; status.className = 'noise';
+    big.textContent = '〰';
+    detail.textContent = 'Sound, but no stable pitch (squeak, air or buzz).';
+  } else if (state === 'between') {
+    status.textContent = 'Between tones'; status.className = 'noise';
+    big.textContent = '?';
+    detail.textContent = `${freq.toFixed(0)} Hz isn't close to any natural tone.`;
+  } else if (state === 'finding') {
+    status.textContent = 'Settling…';
+  } else if (state === 'tone') {
+    const { p, cents } = m;
+    status.textContent = 'Tone'; status.className = 'tone';
+    big.textContent = label(p);
+    const c = Math.round(cents);
+    detail.innerHTML = `written <b>${p.written}</b> · sounds ${p.sounding} · ${freq.toFixed(1)} Hz · ` +
+      `${c === 0 ? 'centred' : (c > 0 ? '+' : '') + c + '¢'}`;
+    needle.style.opacity = 1;
+    needle.style.left = (50 + Math.max(-50, Math.min(50, cents))) + '%';
+    $('rung' + p.n).classList.add('active');
+  }
+}
+
+function renderTimes() {
+  for (const p of PARTIALS) $('time' + p.n).textContent = held[p.n].toFixed(1) + 's';
+}
+
+// ---- Tools ----------------------------------------------------------------------------
+function calibrate() {
+  if (lockedN == null || !lastFreq) {
+    $('detail').textContent = 'Hold a clean tone first, then press Calibrate.';
+    return;
+  }
+  // Set the offset so the current tone reads as centred.
+  setOffset(1200 * Math.log2(lastFreq / (F0 * lockedN)));
+}
+
+function playReference(n) {
+  audioCtx = audioCtx || new AudioContext();
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.value = F0 * n * Math.pow(2, offsetCents / 1200);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.25, t + 0.05);
+  g.gain.linearRampToValueAtTime(0, t + 1.2);
+  osc.connect(g).connect(audioCtx.destination);
+  osc.start(t); osc.stop(t + 1.25);
+}
+
+function copySummary() {
+  const date = new Date().toISOString().slice(0, 10);
+  const lines = PARTIALS.filter(p => held[p.n] > 0.2)
+    .map(p => `  - ${label(p)} (${p.written}, sounds ${p.sounding}): ${held[p.n].toFixed(1)} s`);
+  const text = `- App session ${date}, tuning offset ${offsetCents}¢\n` +
+    (lines.length ? lines.join('\n') : '  - No tones held yet');
+  const pre = $('summary'); pre.hidden = false; pre.textContent = text;
+  navigator.clipboard?.writeText(text).catch(() => {});
+}
+
+function safeGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+function safeSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
+</script>
+</body>
+</html>
